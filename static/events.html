@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Events — Smart Community Hub</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <nav class="navbar">
+    <a class="brand" href="./dashboard.html">🏘️ Community Hub</a>
+    <ul class="nav-links">
+      <li><a href="./dashboard.html">Dashboard</a></li>
+      <li><a href="./events.html" class="active">Events</a></li>
+      <li><a href="./complaints.html">Complaints</a></li>
+    </ul>
+    <div class="nav-user">Hi, <strong id="nav-username"></strong>
+      <button class="btn btn-ghost btn-sm" onclick="logout()">Logout</button>
+    </div>
+    <button class="hamburger" id="hamburger-btn" onclick="toggleMenu()">☰</button>
+  </nav>
+  <div class="mobile-nav" id="mobile-menu">
+    <a href="./dashboard.html">📊 Dashboard</a>
+    <a href="./events.html" class="active">📅 Events</a>
+    <a href="./complaints.html">📣 Complaints</a>
+    <div class="mob-divider"></div>
+    <div class="mob-user">Hi, <strong id="mobile-username"></strong></div>
+    <button class="btn btn-ghost" onclick="logout()" style="width:100%;justify-content:flex-start">Logout</button>
+  </div>
+
+  <main class="main">
+    <div class="page-header fade-up">
+      <h1>📅 Community Events</h1>
+      <p>Organise and discover events happening near you.</p>
+    </div>
+
+    <!-- Submit Form -->
+    <div class="card fade-up" style="margin-bottom:2rem">
+      <h2 style="font-size:1rem;font-weight:600;margin-bottom:1.25rem">Post a New Event</h2>
+      <div id="form-alert" class="alert alert-error"></div>
+      <div id="form-success" class="alert alert-success"></div>
+      <form id="event-form" onsubmit="submitEvent(event)">
+        <div class="form-group">
+          <label for="ev-title">Event Title</label>
+          <input id="ev-title" type="text" placeholder="Community Clean-Up Drive" required />
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="ev-date">Date</label>
+            <input id="ev-date" type="date" required />
+          </div>
+          <div class="form-group">
+            <label for="ev-time">Time</label>
+            <input id="ev-time" type="time" required />
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="ev-image">Banner Image (optional)</label>
+          <input id="ev-image" type="file" accept="image/*" />
+        </div>
+        <button id="ev-btn" class="btn btn-primary" type="submit">Post Event</button>
+      </form>
+    </div>
+
+    <!-- Events List -->
+    <p class="section-title">All Events</p>
+    <div id="events-grid" class="grid grid-2">
+      <div class="card" style="text-align:center;color:var(--text-sub)">Loading events…</div>
+    </div>
+  </main>
+
+  <script src="./app.js"></script>
+  <script>
+    checkAuth();
+    setNavUser();
+
+    async function loadEvents() {
+      const res = await fetch("/events");
+      const events = await res.json();
+      const grid = document.getElementById("events-grid");
+      if (!events.length) { grid.innerHTML = '<div class="card" style="text-align:center;color:var(--text-sub)">No events yet. Be the first to post one!</div>'; return; }
+      grid.innerHTML = events.map(e => `
+        <div class="card fade-up">
+          ${e.image_url
+            ? `<img class="event-img" src="${e.image_url}" alt="${e.title}" />`
+            : `<div class="event-img-placeholder">📅</div>`}
+          <div class="card-title">${e.title}</div>
+          <div class="card-meta">📆 ${e.date} &nbsp;⏰ ${e.time}</div>
+          <div class="card-meta" style="margin-top:0.4rem">👤 ${e.posted_by}</div>
+        </div>
+      `).join("");
+    }
+
+    async function submitEvent(e) {
+      e.preventDefault();
+      const btn = document.getElementById("ev-btn");
+      btn.disabled = true; btn.textContent = "Posting…";
+
+      const fd = new FormData();
+      fd.append("title", document.getElementById("ev-title").value);
+      fd.append("date",  document.getElementById("ev-date").value);
+      fd.append("time",  document.getElementById("ev-time").value);
+      const file = document.getElementById("ev-image").files[0];
+      if (file) fd.append("image", file);
+
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 65000);
+        const res = await fetch("/events", {
+          method: "POST",
+          headers: authHeaders(),   // No Content-Type — browser sets multipart boundary
+          body: fd,
+          signal: controller.signal,
+        });
+        clearTimeout(timer);
+        const data = await res.json().catch(() => ({ detail: "Server error, please try again." }));
+        if (!res.ok) throw new Error(data.detail || "Failed to post event");
+        showAlert("form-success", "Event posted successfully! 🎉", "success");
+        document.getElementById("event-form").reset();
+        loadEvents();
+      } catch (err) {
+        showAlert("form-alert", err.message);
+      } finally {
+        btn.disabled = false; btn.textContent = "Post Event";
+      }
+    }
+
+    loadEvents();
+  </script>
+</body>
+</html>

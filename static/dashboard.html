@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard — Smart Community Hub</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <nav class="navbar">
+    <a class="brand" href="./dashboard.html">🏘️ Community Hub</a>
+    <ul class="nav-links">
+      <li><a href="./dashboard.html" class="active">Dashboard</a></li>
+      <li><a href="./events.html">Events</a></li>
+      <li><a href="./complaints.html">Complaints</a></li>
+    </ul>
+    <div class="nav-user">
+      Hi, <strong id="nav-username"></strong>
+      <button class="btn btn-ghost btn-sm" onclick="logout()">Logout</button>
+    </div>
+    <button class="hamburger" id="hamburger-btn" onclick="toggleMenu()">☰</button>
+  </nav>
+  <div class="mobile-nav" id="mobile-menu">
+    <a href="./dashboard.html" class="active">📊 Dashboard</a>
+    <a href="./events.html">📅 Events</a>
+    <a href="./complaints.html">📣 Complaints</a>
+    <div class="mob-divider"></div>
+    <div class="mob-user">Hi, <strong id="mobile-username"></strong></div>
+    <button class="btn btn-ghost" onclick="logout()" style="width:100%;justify-content:flex-start">Logout</button>
+  </div>
+
+  <main class="main">
+    <div class="page-header fade-up">
+      <h1>Welcome back, <span id="welcome-name"></span> 👋</h1>
+      <p>Here's what's happening in your community today.</p>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-row fade-up">
+      <div class="card stat-card">
+        <div class="stat-num" id="stat-events">—</div>
+        <div class="stat-label">Total Events</div>
+      </div>
+      <div class="card stat-card">
+        <div class="stat-num" id="stat-complaints">—</div>
+        <div class="stat-label">Complaints Filed</div>
+      </div>
+      <div class="card stat-card">
+        <div class="stat-num" id="stat-resolved">—</div>
+        <div class="stat-label">Resolved</div>
+      </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <p class="section-title">Quick Actions</p>
+    <div class="action-cards fade-up">
+      <a class="card action-card" href="./events.html">
+        <span class="action-icon">📅</span>
+        <span class="action-title">Events</span>
+        <span class="action-desc">Post and browse community events</span>
+      </a>
+      <a class="card action-card" href="./complaints.html">
+        <span class="action-icon">📣</span>
+        <span class="action-title">Complaints</span>
+        <span class="action-desc">Report and track issues in your area</span>
+      </a>
+    </div>
+  </main>
+
+  <script src="./app.js"></script>
+  <script>
+    checkAuth();
+    setNavUser();
+    document.getElementById("welcome-name").textContent = getName();
+
+    async function loadStats() {
+      const [evRes, cmRes] = await Promise.all([
+        fetch("/events"),
+        fetch("/complaints", { headers: authHeaders() }),
+      ]);
+      const events     = await evRes.json();
+      const complaints = await cmRes.json();
+      document.getElementById("stat-events").textContent     = events.length;
+      document.getElementById("stat-complaints").textContent = complaints.length;
+      document.getElementById("stat-resolved").textContent   = complaints.filter(c => c.status === "resolved").length;
+    }
+    loadStats();
+  </script>
+</body>
+</html>

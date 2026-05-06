@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Complaints — Smart Community Hub</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <nav class="navbar">
+    <a class="brand" href="./dashboard.html">🏘️ Community Hub</a>
+    <ul class="nav-links">
+      <li><a href="./dashboard.html">Dashboard</a></li>
+      <li><a href="./events.html">Events</a></li>
+      <li><a href="./complaints.html" class="active">Complaints</a></li>
+    </ul>
+    <div class="nav-user">Hi, <strong id="nav-username"></strong>
+      <button class="btn btn-ghost btn-sm" onclick="logout()">Logout</button>
+    </div>
+    <button class="hamburger" id="hamburger-btn" onclick="toggleMenu()">☰</button>
+  </nav>
+  <div class="mobile-nav" id="mobile-menu">
+    <a href="./dashboard.html">📊 Dashboard</a>
+    <a href="./events.html">📅 Events</a>
+    <a href="./complaints.html" class="active">📣 Complaints</a>
+    <div class="mob-divider"></div>
+    <div class="mob-user">Hi, <strong id="mobile-username"></strong></div>
+    <button class="btn btn-ghost" onclick="logout()" style="width:100%;justify-content:flex-start">Logout</button>
+  </div>
+
+  <main class="main">
+    <div class="page-header fade-up">
+      <h1>📣 Complaints</h1>
+      <p>Report issues and track their resolution status.</p>
+    </div>
+
+    <!-- Submit Form -->
+    <div class="card fade-up" style="margin-bottom:2rem">
+      <h2 style="font-size:1rem;font-weight:600;margin-bottom:1.25rem">File a Complaint</h2>
+      <div id="form-alert" class="alert alert-error"></div>
+      <div id="form-success" class="alert alert-success"></div>
+      <form id="complaint-form" onsubmit="submitComplaint(event)">
+        <div class="form-group">
+          <label for="cm-title">Title</label>
+          <input id="cm-title" type="text" placeholder="Broken street light on Main St." required />
+        </div>
+        <div class="form-group">
+          <label for="cm-desc">Description</label>
+          <textarea id="cm-desc" placeholder="Describe the issue in detail…" required></textarea>
+        </div>
+        <div class="form-group">
+          <label for="cm-image">Photo Evidence (optional)</label>
+          <input id="cm-image" type="file" accept="image/*" />
+        </div>
+        <button id="cm-btn" class="btn btn-primary" type="submit">Submit Complaint</button>
+      </form>
+    </div>
+
+    <!-- Complaints List -->
+    <p class="section-title">All Complaints</p>
+    <div id="complaints-list" class="grid grid-2">
+      <div class="card" style="text-align:center;color:var(--text-sub)">Loading complaints…</div>
+    </div>
+  </main>
+
+  <script src="./app.js"></script>
+  <script>
+    checkAuth();
+    setNavUser();
+
+    // Show admin badge in header
+    if (isAdmin()) {
+      document.querySelector(".page-header p").innerHTML =
+        'All community complaints &nbsp;<span class="badge badge-resolved">Admin View</span>';
+    }
+
+    async function loadComplaints() {
+      const res = await fetch("/complaints", { headers: authHeaders() });
+      const complaints = await res.json().catch(() => []);
+      const list = document.getElementById("complaints-list");
+      if (!complaints.length) {
+        list.innerHTML = '<div class="card" style="text-align:center;color:var(--text-sub)">No complaints yet.</div>';
+        return;
+      }
+      list.innerHTML = complaints.map(c => `
+        <div class="card fade-up">
+          ${c.image_url ? `<img class="event-img" src="${c.image_url}" alt="${c.title}" />` : ""}
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:0.5rem;margin-bottom:0.5rem">
+            <div class="card-title">${c.title}</div>
+            <span class="badge badge-${c.status}">${c.status.replace("_", " ")}</span>
+          </div>
+          <p style="font-size:0.875rem;color:var(--text-sub);margin-bottom:0.75rem">${c.description}</p>
+          <div class="card-meta" style="margin-bottom:0.75rem">👤 ${c.posted_by}</div>
+
+          ${c.resolve_reason ? `
+            <div style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);border-radius:8px;padding:0.6rem 0.75rem;font-size:0.8rem;color:#6ee7b7;margin-bottom:0.75rem">
+              ✅ <strong>Resolve reason:</strong> ${c.resolve_reason}
+            </div>` : ""}
+
+          ${isAdmin() ? `
+            <div style="display:flex;flex-direction:column;gap:0.5rem">
+              <select id="status-${c.id}" style="padding:0.35rem 0.6rem;font-size:0.8rem">
+                <option value="pending"   ${c.status==="pending"   ? "selected":""}>Pending</option>
+                <option value="in_review" ${c.status==="in_review" ? "selected":""}>In Review</option>
+                <option value="resolved"  ${c.status==="resolved"  ? "selected":""}>Resolved</option>
+              </select>
+              <textarea id="reason-${c.id}" placeholder="Resolve reason (required when resolving)…"
+                style="min-height:60px;font-size:0.8rem">${c.resolve_reason || ""}</textarea>
+              <button class="btn btn-ghost btn-sm" onclick="updateStatus(${c.id})">Update Status</button>
+            </div>` : ""}
+        </div>
+      `).join("");
+    }
+
+    async function submitComplaint(e) {
+      e.preventDefault();
+      const btn = document.getElementById("cm-btn");
+      btn.disabled = true; btn.textContent = "Submitting…";
+
+      const fd = new FormData();
+      fd.append("title",       document.getElementById("cm-title").value);
+      fd.append("description", document.getElementById("cm-desc").value);
+      const file = document.getElementById("cm-image").files[0];
+      if (file) fd.append("image", file);
+
+      try {
+        const res = await fetch("/complaints", {
+          method: "POST",
+          headers: authHeaders(),
+          body: fd,
+        });
+        const data = await res.json().catch(() => ({ detail: "Server error, please try again." }));
+        if (!res.ok) throw new Error(data.detail || "Failed to submit");
+        showAlert("form-success", "Complaint submitted successfully! ✅", "success");
+        document.getElementById("complaint-form").reset();
+        loadComplaints();
+      } catch (err) {
+        showAlert("form-alert", err.message);
+      } finally {
+        btn.disabled = false; btn.textContent = "Submit Complaint";
+      }
+    }
+
+    async function updateStatus(id) {
+      const status       = document.getElementById(`status-${id}`).value;
+      const resolve_reason = document.getElementById(`reason-${id}`).value.trim();
+      const res = await fetch(`/complaints/${id}/status`, {
+        method: "PATCH",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ status, resolve_reason: resolve_reason || null }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) loadComplaints();
+      else showAlert("form-alert", data.detail || "Failed to update status");
+    }
+
+    loadComplaints();
+  
+  </script>
+</body>
+</html>
